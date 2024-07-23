@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Pago - UYY... CALI</title>
+    <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+        }
+        .container {
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 50px;
+        }
+        .form-control {
+            background-color: #333;
+            color: #fff;
+            border: 1px solid #555;
+        }
+        .form-control:focus {
+            background-color: #444;
+            color: #fff;
+        }
+        label {
+            color: #fff;
+        }
+        h2, h4, strong {
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 class="text-center mb-4">Formulario de Pago</h2>
+        <div id="cart-summary" class="mb-4"></div>
+        <form id="formulario-pago" method="post" action="https://sandbox.checkout.payulatam.com/ppp-web-gateway-payu/">
+            <div class="form-group">
+                <label for="nombre">Nombre</label>
+                <input type="text" class="form-control" id="nombre" name="payerFullName" required>
+            </div>
+            <div class="form-group">
+                <label for="direccion">Dirección</label>
+                <input type="text" class="form-control" id="direccion" name="shippingAddress" required>
+            </div>
+            <div class="form-group">
+                <label for="telefono">Teléfono</label>
+                <input type="tel" class="form-control" id="telefono" name="telephone" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" class="form-control" id="email" name="buyerEmail" required>
+            </div>
+            
+            <!-- Campos ocultos requeridos por PayU -->
+            <input name="merchantId" type="hidden" value="508029">
+            <input name="accountId" type="hidden" value="512321">
+            <input name="description" type="hidden" value="Compra en UYY... CALI">
+            <input name="referenceCode" type="hidden" id="referenceCode" value="">
+            <input name="amount" type="hidden" id="amount" value="">
+            <input name="tax" type="hidden" value="0">
+            <input name="taxReturnBase" type="hidden" value="0">
+            <input name="currency" type="hidden" value="COP">
+            <input name="signature" type="hidden" id="signature" value="">
+            <input name="test" type="hidden" value="1">
+            <input name="responseUrl" type="hidden" value="http://localhost:3000/public_html/respuesta_payu.php">
+            <input name="confirmationUrl" type="hidden" value="http://localhost:3000/public_html/confirmacion_payu.php">
+            
+            <button type="submit" class="btn btn-primary">Pagar con PayU</button>
+        </form>
+    </div>
+
+    <script src="assets/js/jquery-3.5.1.min.js"></script>
+    <script src="assets/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script>
+        // Recuperar el carrito del almacenamiento local
+        let cart = JSON.parse(localStorage.getItem('cart')) || [];
+
+        // Mostrar resumen del carrito
+        function showCartSummary() {
+            let summary = document.getElementById('cart-summary');
+            let total = 0;
+            summary.innerHTML = '<h4>Resumen del Carrito:</h4>';
+            cart.forEach(item => {
+                summary.innerHTML += `<p>${item.name} - $${item.price}</p>`;
+                total += parseFloat(item.price);
+            });
+            summary.innerHTML += `<strong>Total: $${total.toFixed(2)}</strong>`;
+        }
+
+        showCartSummary();
+
+        document.getElementById('formulario-pago').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            let total = cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
+            let referenceCode = 'ORDEN_' + Date.now();
+            
+            // Configura los campos de PayU
+            document.getElementById('referenceCode').value = referenceCode;
+            document.getElementById('amount').value = total.toFixed(2);
+
+            // Genera la firma
+            let apiKey = '4Vj8eK4rloUd272L48hsrarnUA'; // Reemplaza con tu API Key de PayU
+            let merchantId = document.querySelector('input[name="merchantId"]').value;
+            let currency = document.querySelector('input[name="currency"]').value;
+            
+            let signatureString = `${apiKey}~${merchantId}~${referenceCode}~${total.toFixed(2)}~${currency}`;
+            
+            // Generar el hash MD5 usando CryptoJS
+            let signature = CryptoJS.MD5(signatureString).toString();
+            
+            document.getElementById('signature').value = signature;
+
+            // Preparar los datos del pedido
+            let pedidoData = {
+                referenceCode: referenceCode,
+                nombre: document.getElementById('nombre').value,
+                direccion: document.getElementById('direccion').value,
+                telefono: document.getElementById('telefono').value,
+                email: document.getElementById('email').value,
+                items: JSON.stringify(cart),
+                total: total.toFixed(2)
+            };
+
+            fetch('guardar_pedido_temp.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(pedidoData),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('formulario-pago').submit();
+                } else {
+                    alert('Error al guardar el pedido. Por favor, intente de nuevo.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al procesar el pedido. Por favor, intente de nuevo.');
+            });
+        });
+    </script>
+</body>
+</html>
